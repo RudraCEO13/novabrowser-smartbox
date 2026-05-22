@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaBrowser v2 - Smart Omnibox</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            color: #202124;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Top Developer Badge */
+        .dev-badge {
+            background-color: #1a73e8;
+            color: white;
+            text-align: center;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 101;
+            transition: transform 0.3s ease;
+        }
+
+        /* Fixed Browser Header */
+        .browser-header {
+            background-color: #ffffff;
+            padding: 12px 24px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-bottom: 1px solid #e0e0e0;
+            position: fixed;
+            top: 27px; /* Dev badge ke just neeche */
+            width: 100%;
+            z-index: 100;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* Smooth UI Hide Class */
+        .ui-hidden {
+            transform: translateY(-150%);
+        }
+
+        .brand-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a73e8;
+            text-align: center;
+        }
+
+        /* Single Smart Search Bar Container */
+        .search-container {
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-container input {
+            width: 100%;
+            padding: 12px 20px;
+            padding-right: 100px;
+            border: 1px solid #dadce0;
+            border-radius: 24px;
+            font-size: 15px;
+            outline: none;
+            background-color: #f1f3f4;
+            transition: all 0.2s ease;
+        }
+
+        .search-container input:focus {
+            background-color: #ffffff;
+            border-color: #1a73e8;
+            box-shadow: 0 1px 6px rgba(32,33,36,0.25);
+        }
+
+        .search-container button {
+            position: absolute;
+            right: 6px;
+            padding: 8px 18px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .search-container button:hover {
+            background-color: #1557b0;
+        }
+
+        /* Browser Viewport Area */
+        .browser-viewport {
+            flex-grow: 1;
+            margin-top: 115px; /* Space for fixed header and badge */
+            position: relative;
+            height: calc(100vh - 115px);
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #ffffff;
+        }
+
+        /* Touch Control Overlay for Mobile Hiding Feature */
+        .touch-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Passes clicks directly to iframe */
+        }
+
+        /* Clean Start Screen */
+        .placeholder-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #ffffff;
+            z-index: 10;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .logo-placeholder {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 15px;
+        }
+        .logo-placeholder span:nth-child(1) { color: #4285F4; }
+        .logo-placeholder span:nth-child(2) { color: #EA4335; }
+        .logo-placeholder span:nth-child(3) { color: #FBBC05; }
+        .logo-placeholder span:nth-child(4) { color: #34A853; }
+
+        .placeholder-screen p {
+            color: #70757a;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Developer Notification -->
+    <div id="dev-badge" class="dev-badge">
+        Welcome Developers | Testing Phase 🚀
+    </div>
+
+    <!-- Smart Header -->
+    <header id="browser-header" class="browser-header">
+        <div class="brand-title">NovaBrowser Smart Box</div>
+        <div class="search-container">
+            <input type="text" id="omnibox" placeholder="Type URL or search Google...">
+            <button onclick="handleSearch()">Search / Go</button>
+        </div>
+    </header>
+
+    <!-- Main Viewport -->
+    <main class="browser-viewport">
+        <!-- Start Screen -->
+        <div id="placeholder" class="placeholder-screen">
+            <div class="logo-placeholder">
+                <span>N</span><span>o</span><span>v</span><span>a</span>
+            </div>
+            <p>Enter a web link or type anything to search like Google.</p>
+        </div>
+        
+        <!-- Live Window -->
+        <iframe id="browser-frame" src=""></iframe>
+        
+        <!-- Mobile Touch Tracker Layer -->
+        <div id="touch-layer" class="touch-overlay"></div>
+    </main>
+
+    <script>
+        const omnibox = document.getElementById('omnibox');
+        const iframe = document.getElementById('browser-frame');
+        const placeholder = document.getElementById('placeholder');
+        const header = document.getElementById('browser-header');
+        const devBadge = document.getElementById('dev-badge');
+
+        // Main Engine: Mix Link & Search Detection
+        function handleSearch() {
+            let input = omnibox.value.trim();
+            if (!input) return;
+
+            let targetUrl = "";
+
+            // URL Detection regex (checks for domain extensions like .com, .net, .in etc. or IP addresses)
+            const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
+
+            if (urlPattern.test(input)) {
+                // Agar Link hai: Check karo https:// laga hai ya nahi
+                if (!/^https?:\/\//i.test(input)) {
+                    input = 'https://' + input;
+                }
+                targetUrl = input;
+            } else {
+                // Agar pure text hai: Google Search parameters load karo
+                targetUrl = `https://www.google.com/search?q=${encodeURIComponent(input)}&igu=1`;
+            }
+
+            // UI render window
+            placeholder.style.display = 'none';
+            iframe.src = targetUrl;
+        }
+
+        // Action on Keyboard 'Enter' key
+        omnibox.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                handleSearch();
+                omnibox.blur(); // Hide mobile keyboard after search
+            }
+        });
+
+        // Smart UX: UI Hide/Show Logic on Mouse/Touch movement
+        let startY = 0;
+        
+        window.addEventListener('wheel', function(e) {
+            if (e.deltaY > 0) {
+                // Scroll down -> Hide Header 
+                header.classList.add('ui-hidden');
+                devBadge.classList.add('ui-hidden');
+            } else {
+                // Scroll up -> Show Header
+                header.classList.remove('ui-hidden');
+                devBadge.classList.remove('ui-hidden');
+            }
+        });
+
+        // Mobile Screen Swipe Detection
+        window.addEventListener('touchstart', function(e) {
+            startY = e.touches[0].pageY;
+        }, {passive: true});
+
+        window.addEventListener('touchmove', function(e) {
+            let moveY = e.touches[0].pageY;
+            if (startY - moveY > 30) {
+                // Swiped Up (Scrolling Down Content) -> Hide UI
+                header.classList.add('ui-hidden');
+                devBadge.classList.add('ui-hidden');
+            } else if (moveY - startY > 30) {
+                // Swiped Down (Scrolling Up Content) -> Show UI
+                header.classList.remove('ui-hidden');
+                devBadge.classList.remove('ui-hidden');
+            }
+        }, {passive: true});
+    </script>
+</body>
+</html>
